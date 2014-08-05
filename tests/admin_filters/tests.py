@@ -133,6 +133,10 @@ class BookAdminWithTupleBooleanFilter(BookAdmin):
 class BookAdminWithUnderscoreLookupAndTuple(BookAdmin):
     list_filter = ('year', ('author__email', AllValuesFieldListFilter), 'contributors', 'is_best_seller', 'date_registered', 'no')
 
+class BookAdminWithCustomQueryset(BookAdmin):
+
+    def get_queryset(self, request):
+        return super(BookAdminWithCustomQueryset, self).get_queryset(request).filter(author__pk=1)
 
 class BookAdminRelatedOnlyFilter(ModelAdmin):
     list_filter = (
@@ -364,6 +368,17 @@ class ListFiltersTests(TestCase):
         choices = list(filterspec.choices(changelist))
         self.assertEqual(choices[2]['selected'], True)
         self.assertEqual(choices[2]['query_string'], '?year=2002')
+
+        # Make sure that correct filters are returned with custom querysets
+        request = self.request_factory.get('/', {'year__gte': '1900'})
+        changelist = self.get_changelist(request, Book, BookAdminWithCustomQueryset(Book, site))
+        choices = list(changelist.get_filters(request)[0][2].choices(changelist))
+        # First choice should be All
+        self.assertEqual(choices[0]['query_string'], '?year__gte=1900')
+        # Second choice should only by 1 contributor
+        self.assertEqual(choices[1]['query_string'], '?contributors__id__exact=1&year__gte=1900')
+        # Third choice should be None
+        self.assertEqual(choices[2]['query_string'], '?contributors__isnull=True&year__gte=1900')
 
     def test_relatedfieldlistfilter_foreignkey(self):
         modeladmin = BookAdmin(Book, site)
